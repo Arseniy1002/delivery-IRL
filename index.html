@@ -78,7 +78,8 @@
             align-items: center;
             justify-content: center;
             font-size: 0.9em;
-            color: #888;
+            color: #aaa;
+            text-align: center;
         }
 
         .photo-box img {
@@ -98,31 +99,27 @@
 
 <body>
     <div id="pano"></div>
-
     <div id="ui-overlay">
         <div class="stats">Баланс: <span class="cash"><span id="balance">0</span> ₽</span></div>
         <hr style="border-color: #444; margin: 10px 0;">
-
         <div id="order-screen" style="display:none;">
             <div id="task-text"><b>Цель:</b> Подойди к подъезду</div>
             <div class="photo-box" id="photo-target"></div>
             <div id="dist-info" style="font-size: 0.9em; color: #ccc; text-align: center;">Расстояние: -- м</div>
-
             <hr style="border-color: #444; margin: 10px 0;">
-
             <div><b>Фото-фиксация:</b></div>
             <div style="font-size: 0.8em; color: #aaa;">Фото заказа:</div>
             <div class="photo-box" id="photo-order"></div>
             <div style="font-size: 0.8em; color: #aaa;">Фото подъезда:</div>
             <div class="photo-box" id="photo-entrance"></div>
-
             <button id="deliver-btn" onclick="finishOrder()" disabled>ДОСТАВИТЬ</button>
         </div>
-
         <button id="start-btn" onclick="takeOrder()">ВЗЯТЬ ЗАКАЗ</button>
     </div>
 
     <script type="text/javascript">
+        // ОБНОВЛЕНО: Я вернул твой рабочий ключ для Static API.
+        // Главное — не забудь разрешить домен arseniy1002.github.io в его настройках!
         const staticApiKey = 'cdaa77e9-4c18-4bc2-bf84-1441b1315ac6';
 
         let panoramaPlayer;
@@ -130,69 +127,64 @@
         let targetCoords = null;
 
         ymaps.ready(function () {
-            const startPos = [59.939095, 30.315868]; // Дворцовая площадь
+            // Стартуем на дороге (Тверская улица, Москва)
+            const startPos = [55.760507, 37.607182];
+
             ymaps.panorama.locate(startPos).done(
                 function (panoramas) {
                     if (panoramas.length > 0) {
                         panoramaPlayer = new ymaps.panorama.Player('pano', panoramas[0], {
                             controls: ['panoramaName', 'zoom', 'fullscreenControl', 'routeEditor']
                         });
-
-                        // 1. Логика перемещения: отслеживаем каждый шаг игрока
                         panoramaPlayer.events.add('panoramachange', checkDistance);
                     } else {
-                        alert('Не удалось найти панораму для стартовой точки.');
+                        alert('Не удалось найти панораму для стартовой точки. Попробуйте другие координаты.');
                     }
                 },
                 function (error) {
-                    alert('Произошла ошибка: ' + error.message);
+                    alert('Произошла ошибка при загрузке панорамы: ' + error.message);
                 }
             );
         });
 
         function takeOrder() {
             if (!panoramaPlayer) return;
+
             const currentPos = panoramaPlayer.getPanorama().getPosition();
 
-            // 2. Задание: генерируем случайную точку в радиусе ~100-150 метров
             const angle = Math.random() * 2 * Math.PI;
-            const distance = 0.001 + Math.random() * 0.0005; // ~110-160 метров
+            const distance = 0.001 + Math.random() * 0.0005;
             targetCoords = [
                 currentPos[0] + distance * Math.cos(angle),
                 currentPos[1] + distance * Math.sin(angle)
             ];
 
-            // 3. Визуальная подсказка (мини-карта)
             const miniMapUrl = `https://static-maps.yandex.ru/v1?ll=${targetCoords[1]},${targetCoords[0]}&z=18&l=sat&pt=${targetCoords[1]},${targetCoords[0]},pm2rdm&apikey=${staticApiKey}`;
-            document.getElementById('photo-target').innerHTML = `<img src="${miniMapUrl}" alt="Мини-карта цели">`;
 
-            // 4. Фото-фиксация (пустые блоки)
+            // ОБНОВЛЕНО: Добавлен onerror для наглядной обработки ошибки
+            document.getElementById('photo-target').innerHTML = `<img src="${miniMapUrl}" alt="Мини-карта цели" onerror="this.parentElement.innerHTML = 'Ошибка загрузки карты.<br>Проверь настройки ключа API в кабинете Яндекса.';">`;
+
             document.getElementById('photo-order').innerHTML = '<span>Ожидание...</span>';
             document.getElementById('photo-entrance').innerHTML = '<span>Ожидание...</span>';
-
             document.getElementById('start-btn').style.display = 'none';
             document.getElementById('order-screen').style.display = 'block';
-
-            checkDistance(); // Сразу проверяем дистанцию
+            checkDistance();
         }
 
         function checkDistance() {
             if (!targetCoords || !panoramaPlayer.getPanorama()) return;
             const currentPos = panoramaPlayer.getPanorama().getPosition();
             const deliverButton = document.getElementById('deliver-btn');
-
-            // Используем точный расчёт дистанции из API
             const dist = ymaps.coordSystem.geo.getDistance(currentPos, targetCoords);
             document.getElementById('dist-info').innerText = `Расстояние: ${Math.round(dist)} м`;
 
-            // 2. Блокируем кнопку, пока игрок не подойдёт достаточно близко
             if (dist < 15) {
                 deliverButton.disabled = false;
-                deliverButton.style.background = '#00ff00'; // Зеленая, когда активна
+                deliverButton.style.background = '#00ff00';
                 deliverButton.innerText = 'ДОСТАВИТЬ';
             } else {
                 deliverButton.disabled = true;
-                deliverButton.style.background = ''; // Возвращаем стиль для :disabled из CSS
+                deliverButton.style.background = '';
                 deliverButton.innerText = 'ПОДОЙДИТЕ БЛИЖЕ';
             }
         }
@@ -201,27 +193,23 @@
             const reward = Math.floor(150 + Math.random() * 350);
             balance += reward;
             document.getElementById('balance').innerText = balance;
-
-            // 4. Фото-фиксация (заполняем блок "Фото подъезда")
-            // Для примера, делаем "фото" текущего места
             const currentPos = panoramaPlayer.getPanorama().getPosition();
+
             const entrancePhotoUrl = `https://static-maps.yandex.ru/v1?ll=${currentPos[1]},${currentPos[0]}&z=19&l=sat,skl&pt=${currentPos[1]},${currentPos[0]},pm2gnm&apikey=${staticApiKey}`;
-            document.getElementById('photo-entrance').innerHTML = `<img src="${entrancePhotoUrl}" alt="Фото подъезда">`;
+
+            // ОБНОВЛЕНО: Добавлен onerror для наглядной обработки ошибки
+            document.getElementById('photo-entrance').innerHTML = `<img src="${entrancePhotoUrl}" alt="Фото подъезда" onerror="this.parentElement.innerHTML = 'Ошибка загрузки фото.';">`;
             document.getElementById('photo-order').innerHTML = `<span>Доставлено</span>`;
 
             alert(`Заказ доставлен! +${reward}₽`);
             targetCoords = null;
-
-            // Сбрасываем UI через 2 секунды, чтобы игрок успел увидеть "фото"
             setTimeout(() => {
                 document.getElementById('start-btn').style.display = 'block';
                 document.getElementById('order-screen').style.display = 'none';
-                // Сбрасываем кнопку в исходное состояние
                 document.getElementById('deliver-btn').innerText = 'ДОСТАВИТЬ';
                 document.getElementById('deliver-btn').style.background = '';
             }, 2000);
         }
-
     </script>
 </body>
 
