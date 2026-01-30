@@ -15,12 +15,12 @@
             padding: 0;
             overflow: hidden;
             font-family: 'Segoe UI', sans-serif;
+            background-color: #000;
         }
 
         #pano {
             width: 100%;
             height: 100%;
-            background-color: #222;
         }
 
         #ui-overlay {
@@ -34,6 +34,7 @@
             padding: 15px;
             color: white;
             z-index: 1000;
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
         }
 
         .cash {
@@ -46,15 +47,23 @@
             width: 100%;
             padding: 12px;
             background: #ffcc00;
+            color: #000;
             border: none;
             border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
             margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #ffe066;
         }
 
         button:disabled {
             background: #555;
+            color: #999;
+            cursor: not-allowed;
         }
 
         .photo-box {
@@ -62,9 +71,14 @@
             height: 120px;
             background: #333;
             border-radius: 8px;
-            margin: 10px 0;
+            margin: 5px 0 10px 0;
             overflow: hidden;
             border: 1px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+            color: #888;
         }
 
         .photo-box img {
@@ -72,85 +86,142 @@
             height: 100%;
             object-fit: cover;
         }
+
+        .stats,
+        #order-screen {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
     </style>
 </head>
 
 <body>
-
     <div id="pano"></div>
 
     <div id="ui-overlay">
         <div class="stats">Баланс: <span class="cash"><span id="balance">0</span> ₽</span></div>
+        <hr style="border-color: #444; margin: 10px 0;">
+
         <div id="order-screen" style="display:none;">
-            <div id="task-text">Дойди до подъезда:</div>
+            <div id="task-text"><b>Цель:</b> Подойди к подъезду</div>
             <div class="photo-box" id="photo-target"></div>
-            <div id="dist-info" style="font-size: 0.8em; color: #aaa;">Расстояние: -- м</div>
-            <button id="deliver-btn" onclick="finishOrder()" disabled>ЗАВЕРШИТЬ</button>
+            <div id="dist-info" style="font-size: 0.9em; color: #ccc; text-align: center;">Расстояние: -- м</div>
+
+            <hr style="border-color: #444; margin: 10px 0;">
+
+            <div><b>Фото-фиксация:</b></div>
+            <div style="font-size: 0.8em; color: #aaa;">Фото заказа:</div>
+            <div class="photo-box" id="photo-order"></div>
+            <div style="font-size: 0.8em; color: #aaa;">Фото подъезда:</div>
+            <div class="photo-box" id="photo-entrance"></div>
+
+            <button id="deliver-btn" onclick="finishOrder()" disabled>ДОСТАВИТЬ</button>
         </div>
+
         <button id="start-btn" onclick="takeOrder()">ВЗЯТЬ ЗАКАЗ</button>
     </div>
 
     <script type="text/javascript">
+        const staticApiKey = 'cdaa77e9-4c18-4bc2-bf84-1441b1315ac6';
+
         let panoramaPlayer;
         let balance = 0;
         let targetCoords = null;
-        const staticApiKey = 'ТВОЙ_STATIC_API_КЛЮЧ'; // ВСТАВЬ ТУТ STATIC API КЛЮЧ
 
         ymaps.ready(function () {
-            const startPos = [59.939095, 30.315868];
-            ymaps.panorama.locate(startPos).done(function (panoramas) {
-                if (panoramas.length > 0) {
-                    panoramaPlayer = new ymaps.panorama.Player('pano', panoramas[0]);
-                    // Следим за каждым шагом игрока
-                    panoramaPlayer.events.add('panoramachange', checkDistance);
+            const startPos = [59.939095, 30.315868]; // Дворцовая площадь
+            ymaps.panorama.locate(startPos).done(
+                function (panoramas) {
+                    if (panoramas.length > 0) {
+                        panoramaPlayer = new ymaps.panorama.Player('pano', panoramas[0], {
+                            controls: ['panoramaName', 'zoom', 'fullscreenControl', 'routeEditor']
+                        });
+
+                        // 1. Логика перемещения: отслеживаем каждый шаг игрока
+                        panoramaPlayer.events.add('panoramachange', checkDistance);
+                    } else {
+                        alert('Не удалось найти панораму для стартовой точки.');
+                    }
+                },
+                function (error) {
+                    alert('Произошла ошибка: ' + error.message);
                 }
-            });
+            );
         });
 
         function takeOrder() {
-            // Генерация точки в радиусе 100-200 метров
+            if (!panoramaPlayer) return;
             const currentPos = panoramaPlayer.getPanorama().getPosition();
+
+            // 2. Задание: генерируем случайную точку в радиусе ~100-150 метров
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = 0.001 + Math.random() * 0.0005; // ~110-160 метров
             targetCoords = [
-                currentPos[0] + (Math.random() - 0.5) * 0.002,
-                currentPos[1] + (Math.random() - 0.5) * 0.002
+                currentPos[0] + distance * Math.cos(angle),
+                currentPos[1] + distance * Math.sin(angle)
             ];
 
-            // Фотка "подъезда" через Static API (вид сверху как ориентир)
-            const imgUrl = `https://static-maps.yandex.ru/v1?ll=${targetCoords[1]},${targetCoords[0]}&z=19&l=sat&apikey=${staticApiKey}`;
-            document.getElementById('photo-target').innerHTML = `<img src="${imgUrl}">`;
+            // 3. Визуальная подсказка (мини-карта)
+            const miniMapUrl = `https://static-maps.yandex.ru/v1?ll=${targetCoords[1]},${targetCoords[0]}&z=18&l=sat&pt=${targetCoords[1]},${targetCoords[0]},pm2rdm&apikey=${staticApiKey}`;
+            document.getElementById('photo-target').innerHTML = `<img src="${miniMapUrl}" alt="Мини-карта цели">`;
+
+            // 4. Фото-фиксация (пустые блоки)
+            document.getElementById('photo-order').innerHTML = '<span>Ожидание...</span>';
+            document.getElementById('photo-entrance').innerHTML = '<span>Ожидание...</span>';
 
             document.getElementById('start-btn').style.display = 'none';
             document.getElementById('order-screen').style.display = 'block';
-            checkDistance();
+
+            checkDistance(); // Сразу проверяем дистанцию
         }
 
         function checkDistance() {
-            if (!targetCoords) return;
+            if (!targetCoords || !panoramaPlayer.getPanorama()) return;
             const currentPos = panoramaPlayer.getPanorama().getPosition();
+            const deliverButton = document.getElementById('deliver-btn');
 
-            // Считаем расстояние (упрощенно)
-            const dist = Math.sqrt(Math.pow(currentPos[0] - targetCoords[0], 2) + Math.pow(currentPos[1] - targetCoords[1], 2)) * 111300;
-
+            // Используем точный расчёт дистанции из API
+            const dist = ymaps.coordSystem.geo.getDistance(currentPos, targetCoords);
             document.getElementById('dist-info').innerText = `Расстояние: ${Math.round(dist)} м`;
 
-            if (dist < 15) { // Если подошел ближе чем на 15 метров
-                document.getElementById('deliver-btn').disabled = false;
-                document.getElementById('deliver-btn').style.background = '#00ff00';
+            // 2. Блокируем кнопку, пока игрок не подойдёт достаточно близко
+            if (dist < 15) {
+                deliverButton.disabled = false;
+                deliverButton.style.background = '#00ff00'; // Зеленая, когда активна
+                deliverButton.innerText = 'ДОСТАВИТЬ';
             } else {
-                document.getElementById('deliver-btn').disabled = true;
-                document.getElementById('deliver-btn').style.background = '#ffcc00';
+                deliverButton.disabled = true;
+                deliverButton.style.background = ''; // Возвращаем стиль для :disabled из CSS
+                deliverButton.innerText = 'ПОДОЙДИТЕ БЛИЖЕ';
             }
         }
 
         function finishOrder() {
-            balance += 500;
+            const reward = Math.floor(150 + Math.random() * 350);
+            balance += reward;
             document.getElementById('balance').innerText = balance;
-            alert('Заказ доставлен! +500₽');
 
+            // 4. Фото-фиксация (заполняем блок "Фото подъезда")
+            // Для примера, делаем "фото" текущего места
+            const currentPos = panoramaPlayer.getPanorama().getPosition();
+            const entrancePhotoUrl = `https://static-maps.yandex.ru/v1?ll=${currentPos[1]},${currentPos[0]}&z=19&l=sat,skl&pt=${currentPos[1]},${currentPos[0]},pm2gnm&apikey=${staticApiKey}`;
+            document.getElementById('photo-entrance').innerHTML = `<img src="${entrancePhotoUrl}" alt="Фото подъезда">`;
+            document.getElementById('photo-order').innerHTML = `<span>Доставлено</span>`;
+
+            alert(`Заказ доставлен! +${reward}₽`);
             targetCoords = null;
-            document.getElementById('start-btn').style.display = 'block';
-            document.getElementById('order-screen').style.display = 'none';
+
+            // Сбрасываем UI через 2 секунды, чтобы игрок успел увидеть "фото"
+            setTimeout(() => {
+                document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('order-screen').style.display = 'none';
+                // Сбрасываем кнопку в исходное состояние
+                document.getElementById('deliver-btn').innerText = 'ДОСТАВИТЬ';
+                document.getElementById('deliver-btn').style.background = '';
+            }, 2000);
         }
+
     </script>
 </body>
 
