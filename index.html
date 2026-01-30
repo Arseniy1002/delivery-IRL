@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Delivery IRL — Симулятор Курьера</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=99836553-15c4-4c1f-b8ef-791b2d40a781"
+        type="text/javascript"></script>
+
+    <style>
+        /* Обнуляем отступы, чтобы игра была на весь экран */
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        /* Контейнер для панорам */
+        #pano {
+            width: 100%;
+            height: 100%;
+            background-color: #222;
+        }
+
+        /* Интерфейс смартфона курьера */
+        #ui-overlay {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 280px;
+            background: rgba(20, 20, 20, 0.9);
+            border: 2px solid #ffcc00;
+            border-radius: 15px;
+            padding: 15px;
+            color: white;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .stats {
+            margin-bottom: 10px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .cash {
+            color: #00ff00;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #ffcc00;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #e6b800;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="pano"></div>
+
+    <div id="ui-overlay">
+        <div class="stats">
+            <div>Баланс: <span class="cash" id="balance">0</span> ₽</div>
+            <div id="order-info" style="margin-top: 5px; font-size: 0.9em; color: #aaa;">Заказов нет</div>
+        </div>
+        <button id="main-btn" onclick="startOrder()">ВЗЯТЬ ЗАКАЗ</button>
+    </div>
+
+    <script type="text/javascript">
+        let panoramaPlayer;
+        let balance = 0;
+
+        ymaps.ready(function () {
+            // Начальная точка — например, центр Питера (тут красиво)
+            const startCoords = [59.939095, 30.315868];
+
+            // Ищем панораму в этой точке
+            ymaps.panorama.locate(startCoords).done(function (panoramas) {
+                if (panoramas.length > 0) {
+                    // Создаем плеер панорам
+                    panoramaPlayer = new ymaps.panorama.Player('pano', panoramas[0], {
+                        controls: ['zoomControl', 'fullscreenControl']
+                    });
+                } else {
+                    document.getElementById('pano').innerHTML = '<h2 style="color:white; text-align:center; padding-top:20%;">Панорамы не загрузились. Проверь ключ или координаты.</h2>';
+                }
+            });
+        });
+
+        function startOrder() {
+            const btn = document.getElementById('main-btn');
+            const info = document.getElementById('order-info');
+
+            // Простая имитация заказа
+            btn.disabled = true;
+            btn.innerText = "В ПУТИ...";
+            info.innerText = "Доставка: ул. Большая Морская, д. 2";
+            info.style.color = "#ffcc00";
+
+            // Имитируем завершение через 5 секунд для теста
+            setTimeout(() => {
+                balance += 250;
+                document.getElementById('balance').innerText = balance;
+                btn.disabled = false;
+                btn.innerText = "ВЗЯТЬ ЗАКАЗ";
+                info.innerText = "Заказ выполнен! +250₽";
+                info.style.color = "#00ff00";
+            }, 5000);
+        }
+    </script>
+</body>
+
+</html>
