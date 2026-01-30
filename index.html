@@ -6,7 +6,6 @@
     <title>Delivery IRL — Симулятор Курьера</title>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=99836553-15c4-4c1f-b8ef-791b2d40a781"
         type="text/javascript"></script>
-
     <style>
         body,
         html {
@@ -35,13 +34,6 @@
             padding: 15px;
             color: white;
             z-index: 1000;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-        }
-
-        .stats {
-            margin-bottom: 10px;
-            border-bottom: 1px solid #444;
-            padding-bottom: 10px;
         }
 
         .cash {
@@ -58,22 +50,27 @@
             border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            transition: 0.3s;
-        }
-
-        button:hover {
-            background: #e6b800;
+            margin-top: 10px;
         }
 
         button:disabled {
             background: #555;
-            cursor: not-allowed;
         }
 
-        #order-info {
-            margin-top: 10px;
-            font-size: 0.9em;
-            min-height: 40px;
+        .photo-box {
+            width: 100%;
+            height: 120px;
+            background: #333;
+            border-radius: 8px;
+            margin: 10px 0;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+
+        .photo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
     </style>
 </head>
@@ -83,57 +80,76 @@
     <div id="pano"></div>
 
     <div id="ui-overlay">
-        <div class="stats">
-            Баланс: <span class="cash"><span id="balance">0</span> ₽</span>
+        <div class="stats">Баланс: <span class="cash"><span id="balance">0</span> ₽</span></div>
+        <div id="order-screen" style="display:none;">
+            <div id="task-text">Дойди до подъезда:</div>
+            <div class="photo-box" id="photo-target"></div>
+            <div id="dist-info" style="font-size: 0.8em; color: #aaa;">Расстояние: -- м</div>
+            <button id="deliver-btn" onclick="finishOrder()" disabled>ЗАВЕРШИТЬ</button>
         </div>
-        <div id="order-info">Заказов пока нет</div>
-        <button id="main-btn" onclick="startOrder()">ВЗЯТЬ ЗАКАЗ</button>
+        <button id="start-btn" onclick="takeOrder()">ВЗЯТЬ ЗАКАЗ</button>
     </div>
 
     <script type="text/javascript">
         let panoramaPlayer;
         let balance = 0;
-        // ВСТАВЬ ТУТ КЛЮЧ ОТ STATIC API (ВТОРОЙ СЕРВИС)
-        const staticApiKey = 'cdaa77e9-4c18-4bc2-bf84-1441b1315ac6';
+        let targetCoords = null;
+        const staticApiKey = 'ТВОЙ_STATIC_API_КЛЮЧ'; // ВСТАВЬ ТУТ STATIC API КЛЮЧ
 
         ymaps.ready(function () {
-            const startCoords = [59.939095, 30.315868]; // Питер
-            ymaps.panorama.locate(startCoords).done(function (panoramas) {
+            const startPos = [59.939095, 30.315868];
+            ymaps.panorama.locate(startPos).done(function (panoramas) {
                 if (panoramas.length > 0) {
-                    panoramaPlayer = new ymaps.panorama.Player('pano', panoramas[0], {
-                        controls: ['zoomControl', 'fullscreenControl']
-                    });
-                } else {
-                    document.getElementById('pano').innerHTML = '<h2 style="color:white;text-align:center;padding-top:20%;">Ошибка загрузки панорам</h2>';
+                    panoramaPlayer = new ymaps.panorama.Player('pano', panoramas[0]);
+                    // Следим за каждым шагом игрока
+                    panoramaPlayer.events.add('panoramachange', checkDistance);
                 }
             });
         });
 
-        function startOrder() {
-            const btn = document.getElementById('main-btn');
-            const info = document.getElementById('order-info');
+        function takeOrder() {
+            // Генерация точки в радиусе 100-200 метров
+            const currentPos = panoramaPlayer.getPanorama().getPosition();
+            targetCoords = [
+                currentPos[0] + (Math.random() - 0.5) * 0.002,
+                currentPos[1] + (Math.random() - 0.5) * 0.002
+            ];
 
-            // Координаты для мини-карты
-            const targetLat = 59.93 + (Math.random() * 0.01);
-            const targetLng = 30.31 + (Math.random() * 0.02);
+            // Фотка "подъезда" через Static API (вид сверху как ориентир)
+            const imgUrl = `https://static-maps.yandex.ru/v1?ll=${targetCoords[1]},${targetCoords[0]}&z=19&l=sat&apikey=${staticApiKey}`;
+            document.getElementById('photo-target').innerHTML = `<img src="${imgUrl}">`;
 
-            // Ссылка на Static API
-            const mapImg = `https://static-maps.yandex.ru/v1?ll=${targetLng},${targetLat}&z=13&pt=${targetLng},${targetLat},pm2rdm&size=250,150&apikey=${staticApiKey}`;
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('order-screen').style.display = 'block';
+            checkDistance();
+        }
 
-            btn.disabled = true;
-            btn.innerText = "В ПУТИ...";
-            info.innerHTML = `
-                <div style="margin: 5px 0">Точка на карте:</div>
-                <img src="${mapImg}" style="width:100%; border-radius:10px; border:1px solid #444; margin-top:5px;">
-            `;
+        function checkDistance() {
+            if (!targetCoords) return;
+            const currentPos = panoramaPlayer.getPanorama().getPosition();
 
-            setTimeout(() => {
-                balance += 350;
-                document.getElementById('balance').innerText = balance;
-                btn.disabled = false;
-                btn.innerText = "ВЗЯТЬ ЗАКАЗ";
-                info.innerHTML = "<span style='color:#00ff00'>Доставлено! +350₽</span>";
-            }, 5000);
+            // Считаем расстояние (упрощенно)
+            const dist = Math.sqrt(Math.pow(currentPos[0] - targetCoords[0], 2) + Math.pow(currentPos[1] - targetCoords[1], 2)) * 111300;
+
+            document.getElementById('dist-info').innerText = `Расстояние: ${Math.round(dist)} м`;
+
+            if (dist < 15) { // Если подошел ближе чем на 15 метров
+                document.getElementById('deliver-btn').disabled = false;
+                document.getElementById('deliver-btn').style.background = '#00ff00';
+            } else {
+                document.getElementById('deliver-btn').disabled = true;
+                document.getElementById('deliver-btn').style.background = '#ffcc00';
+            }
+        }
+
+        function finishOrder() {
+            balance += 500;
+            document.getElementById('balance').innerText = balance;
+            alert('Заказ доставлен! +500₽');
+
+            targetCoords = null;
+            document.getElementById('start-btn').style.display = 'block';
+            document.getElementById('order-screen').style.display = 'none';
         }
     </script>
 </body>
